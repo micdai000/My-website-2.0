@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Drag to Dodge</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+    #gameArea {
+      width: 100vw;
+      height: 100vh;
+      background: #f0f0f0;
+      position: relative;
+    }
+    #player {
+      width: 30px;
+      height: 30px;
+      background: green;
+      position: absolute;
+      top: 300px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-radius: 50%;
+      cursor: grab;
+      z-index: 2;
+    }
+    .obstacle {
+      width: 40px;
+      height: 40px;
+      background: red;
+      position: absolute;
+      top: 0;
+      z-index: 1;
+    }
+    #gameOver {
+      position: absolute;
+      top: 40%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 2em;
+      color: red;
+      display: none;
+      z-index: 3;
+    }
+    #restartBtn {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      padding: 10px 20px;
+      font-size: 1em;
+      display: none;
+      z-index: 3;
+    }
+    #levelDisplay {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 20px;
+      font-weight: bold;
+      z-index: 4;
+    }
+    #levelUpMessage {
+      position: absolute;
+      top: 45%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 2.5em;
+      color: blue;
+      display: none;
+      z-index: 4;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameArea">
+    <div id="player" draggable="true"></div>
+    <div id="gameOver">Game Over!</div>
+    <button id="restartBtn">Play Again</button>
+    <div id="levelDisplay">Level: 1</div>
+    <div id="levelUpMessage">Level up!</div>
+  </div>
+
+  <script>
+    const gameArea = document.getElementById("gameArea");
+    const player = document.getElementById("player");
+    const gameOverText = document.getElementById("gameOver");
+    const restartBtn = document.getElementById("restartBtn");
+    const levelDisplay = document.getElementById("levelDisplay");
+    const levelUpMsg = document.getElementById("levelUpMessage");
+
+    let isDragging = false;
+    const snakeBody = [];
+    const maxSegments = 10;
+
+    let level = 1;
+    const maxLevel = 10;
+    let fallSpeed = 5;
+    let spawnRate = 1000;
+    let gameOver = false;
+    let spawner;
+
+    // Enable dragging
+    player.addEventListener("mousedown", () => { isDragging = true; });
+    document.addEventListener("mouseup", () => { isDragging = false; });
+
+    document.addEventListener("mousemove", (e) => {
+      if (isDragging) {
+        let x = e.clientX - player.offsetWidth / 2;
+        let y = e.clientY - player.offsetHeight / 2;
+        x = Math.max(0, Math.min(x, window.innerWidth - player.offsetWidth));
+        y = Math.max(0, Math.min(y, window.innerHeight - player.offsetHeight));
+        player.style.left = x + "px";
+        player.style.top = y + "px";
+        updateSnakeBody(x, y);
+      }
+    });
+
+    function updateSnakeBody(x, y) {
+      const segment = document.createElement("div");
+      segment.style.width = "20px";
+      segment.style.height = "20px";
+      segment.style.background = "green";
+      segment.style.borderRadius = "50%";
+      segment.style.position = "absolute";
+      segment.style.left = x + "px";
+      segment.style.top = y + "px";
+      gameArea.appendChild(segment);
+      snakeBody.push(segment);
+      if (snakeBody.length > maxSegments) {
+        const oldSegment = snakeBody.shift();
+        oldSegment.remove();
+      }
+    }
+
+    function createObstacle() {
+      if (gameOver) return;
+
+      const obstacle = document.createElement("div");
+      obstacle.classList.add("obstacle");
+      obstacle.style.left = Math.random() * (window.innerWidth - 40) + "px";
+      gameArea.appendChild(obstacle);
+
+      let y = 0;
+      const fall = setInterval(() => {
+        y += fallSpeed;
+        obstacle.style.top = y + "px";
+
+        const playerRect = player.getBoundingClientRect();
+        const obstacleRect = obstacle.getBoundingClientRect();
+        if (
+          obstacleRect.top < playerRect.bottom &&
+          obstacleRect.bottom > playerRect.top &&
+          obstacleRect.left < playerRect.right &&
+          obstacleRect.right > playerRect.left
+        ) {
+          gameOverText.style.display = "block";
+          restartBtn.style.display = "block";
+          gameOver = true;
+          clearInterval(fall);
+          clearInterval(levelTimer);
+          clearInterval(spawner);
+        }
+
+        if (y > window.innerHeight) {
+          obstacle.remove();
+          clearInterval(fall);
+        }
+      }, 20);
+    }
+
+    function startSpawner() {
+      if (spawner) clearInterval(spawner);
+      spawner = setInterval(() => {
+        const blocksToSpawn = level;
+        for (let i = 0; i < blocksToSpawn; i++) {
+          setTimeout(() => {
+            createObstacle();
+          }, Math.random() * 800); // Random delay for each block
+        }
+      }, spawnRate);
+    }
+
+    // Start first wave
+    startSpawner();
+
+    // Level system every 10 seconds
+    const levelTimer = setInterval(() => {
+      if (level < maxLevel) {
+        level++;
+        fallSpeed += 2;
+        spawnRate = Math.max(200, spawnRate - 80);
+        levelDisplay.textContent = "Level: " + level;
+        startSpawner();
+
+        // Show "Level up!" message
+        levelUpMsg.style.display = "block";
+        setTimeout(() => {
+          levelUpMsg.style.display = "none";
+        }, 1500);
+      } else {
+        clearInterval(levelTimer);
+        if (!gameOver) {
+          setTimeout(() => {
+            gameOverText.textContent = "You won!";
+            gameOverText.style.display = "block";
+            restartBtn.style.display = "block";
+            clearInterval(spawner);
+          }, 10000); // wait one last level duration
+        }
+      }
+    }, 10000); // level up every 10s
+
+    restartBtn.addEventListener("click", () => {
+      location.reload();
+    });
+  </script>
+</body>
+</html>
